@@ -2,10 +2,7 @@
 
 ## Ce qui a été fait
 
-### 1. Documentation
-- Création de `CLAUDE.md` à la racine du projet : architecture, commandes, structure des données, constantes de tuning.
-
-### 2. Passage en français
+### 1. Passage en français
 Le projet était entièrement codé en italien. Les modifications suivantes ont été apportées :
 
 **`src/utils/dialog_manager.py`**
