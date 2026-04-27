@@ -1,0 +1,17 @@
+# Virtual environment
+facenet/
+
+# Personal config (use config_example.py as template)
+src/config.py
+
+# Data (personal conversations, profiles, face embeddings)
+data/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE
+.vscode/
+.idea/

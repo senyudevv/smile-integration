@@ -557,7 +557,7 @@ def main():
                         print(f"👁️  Nouveau visage détecté : {name}")
 
                         # Avvia nuova interazione in thread dedicato
-                        th = threading.Thread(target=handle_interaction_threadsafe, args=(name, embedding), daemon=True)
+                        th = threading.Thread(target=handle_interaction_threadsafe, args=(name, embedding), daemon=False)
                         active_interactions[display_key] = th
                         th.start()
 
@@ -578,10 +578,17 @@ def main():
             break
 
     # --- 🔹 Cleanup finale
-    shutdown_executors()
     cap.release()
     cv2.destroyAllWindows()
     exit_event.set()
+
+    active_threads = [t for t in active_interactions.values() if isinstance(t, threading.Thread) and t.is_alive()]
+    if active_threads:
+        print(f"⏳ Sauvegarde du profil en cours ({len(active_threads)} conversation(s))...")
+        for t in active_threads:
+            t.join(timeout=30)
+
+    shutdown_executors()
     print("\n✅ Fermeture terminée.")
 
 
@@ -589,4 +596,8 @@ def main():
 # 🚀 AVVIO
 # ==========================================
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        exit_event.set()
+        print("\n✅ Fermeture demandée (Ctrl+C).")

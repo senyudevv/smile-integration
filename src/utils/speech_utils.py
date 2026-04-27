@@ -128,7 +128,7 @@ def transcribe_audio(duration=20, stop_on_silence=True, silence_limit=1.5, silen
                         channels=CHANNELS,
                         rate=RATE,
                         input=True,
-                        input_device_index=MIC_INDEX,
+                        input_device_index=dev_idx_used,
                         frames_per_buffer=CHUNK)
     except Exception as e:
         print(f"⚠️ [MIC] Impossibile aprire stream (index={MIC_INDEX}): {e}")
