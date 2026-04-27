@@ -75,6 +75,31 @@ def ask_ollama(prompt: str, model: str = MODEL_NAME) -> str:
     return resp.json().get("response", "")
 
 
+def stream_ollama_response(
+    user_name: str,
+    user_text: str,
+    is_first_turn: bool = False,
+    state: str = "FREE_TALK",
+):
+    """Générateur : yield les tokens texte au fur et à mesure depuis Ollama."""
+    prompt = build_llm_prompt(user_name, user_text, is_first_turn=is_first_turn, state=state)
+    payload = {"model": MODEL_NAME, "prompt": prompt, "stream": True}
+    try:
+        with requests.post(OLLAMA_URL, json=payload, stream=True, timeout=120) as resp:
+            for line in resp.iter_lines():
+                if not line:
+                    continue
+                try:
+                    chunk = json.loads(line)
+                    yield chunk.get("response", "")
+                    if chunk.get("done", False):
+                        break
+                except json.JSONDecodeError:
+                    continue
+    except Exception as e:
+        print(f"[LLM] Erreur streaming Ollama : {e}")
+
+
 def ask_ollama_with_context(
     user_name: str,
     user_text: str,

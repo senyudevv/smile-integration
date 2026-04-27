@@ -1,23 +1,67 @@
 import pyaudio
 import audioop
+import asyncio
+import os
+import re
+import tempfile
 import time
 import json
-import re
 from vosk import Model, KaldiRecognizer
 import pyttsx3
 
 from src.config import VOSK_MODEL_PATH, VOICE_RATE, VOICE_VOLUME, DEFAULT_VOICE_INDEX, MIC_INDEX, MIC_SAMPLE_RATE
+
 model = Model(str(VOSK_MODEL_PATH))
 
+EDGE_TTS_VOICE = "fr-FR-HenriNeural"
+_pygame_ready = False
 
-def speak(text):
-    engine = pyttsx3.init()
-    engine.setProperty('rate', VOICE_RATE)
-    engine.setProperty('volume', VOICE_VOLUME)
-    voices = engine.getProperty('voices')
-    engine.setProperty('voice', voices[DEFAULT_VOICE_INDEX].id)
-    engine.say(text)
-    engine.runAndWait()
+
+def _ensure_pygame():
+    global _pygame_ready
+    if not _pygame_ready:
+        import pygame
+        pygame.mixer.init()
+        _pygame_ready = True
+
+
+async def _edge_speak(text: str):
+    import edge_tts
+    communicate = edge_tts.Communicate(text, EDGE_TTS_VOICE)
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
+        tmp = f.name
+    await communicate.save(tmp)
+    return tmp
+
+
+def speak(text: str):
+    if not text or not text.strip():
+        return
+    try:
+        import pygame
+        _ensure_pygame()
+        tmp = asyncio.run(_edge_speak(text))
+        pygame.mixer.music.load(tmp)
+        pygame.mixer.music.play()
+        while pygame.mixer.music.get_busy():
+            pygame.time.wait(30)
+        pygame.mixer.music.unload()
+        try:
+            os.unlink(tmp)
+        except Exception:
+            pass
+    except Exception as e:
+        print(f"[TTS] edge-tts indisponible, fallback pyttsx3 : {e}")
+        try:
+            engine = pyttsx3.init()
+            engine.setProperty('rate', VOICE_RATE)
+            engine.setProperty('volume', VOICE_VOLUME)
+            voices = engine.getProperty('voices')
+            engine.setProperty('voice', voices[DEFAULT_VOICE_INDEX].id)
+            engine.say(text)
+            engine.runAndWait()
+        except Exception as e2:
+            print(f"[TTS] Erreur pyttsx3 : {e2}")
 
 
 def find_working_mic(trials_rates=(16000, 48000), trials_channels=(1, 2), timeout=1.0):
@@ -62,7 +106,6 @@ def _to_mono_and_resample(raw_bytes, width, in_channels, in_rate, out_rate=16000
     elif in_channels == 1:
         mono = raw_bytes
     else:
-        # >2 canaux : downmix simple
         try:
             mono = audioop.tomono(raw_bytes, width, 1.0 / in_channels, 1.0 / in_channels)
         except Exception:
@@ -76,7 +119,7 @@ def _to_mono_and_resample(raw_bytes, width, in_channels, in_rate, out_rate=16000
     return mono
 
 
-def transcribe_audio(duration=20, stop_on_silence=True, silence_limit=1.5, silence_hangover=2.2):
+def transcribe_audio(duration=20, stop_on_silence=True, silence_limit=1.5, silence_hangover=1.5):
     """
     Enregistrement audio robuste.
     Retourne la chaîne transcrite ou "" en cas d'échec.
