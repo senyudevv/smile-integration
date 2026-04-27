@@ -155,11 +155,11 @@ Retourne un JSON avec :
 
         # --- 5. Salva ---
         save_profile(name, profile)
-        print(f"[MEMORY] ✅ Profilo di {name} aggiornato correttamente con nuove informazioni.")
+        print(f"[MEMORY] Profil de {name} mis à jour avec les nouvelles informations.")
         return profile
 
     except Exception as e:
-        print(f"[MEMORY] Errore durante il riassunto: {e}")
+        print(f"[MEMORY] Erreur lors du résumé : {e}")
         return None
 
 

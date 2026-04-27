@@ -36,10 +36,10 @@ from src.utils.async_core import (
 # EMB_FILE = "../data/embeddings.pkl"
 
 # 🔧 Configurazione ottimizzata
-TRACKER_MAX_LOST = 15  # 🔧 Aumentato da 8 (più tollerante)
-EMBED_INTERVAL = 20.0   # 🔧 Secondi tra embedding dello stesso tracker
-RESEEN_THRESHOLD = 30  # 🔧 Secondi prima di ri-salutare
-IOU_THRESHOLD = 0.3    # 🔧 Soglia IoU per matching
+TRACKER_MAX_LOST = 15  # 🔧 Augmenté de 8 (plus tolérant)
+EMBED_INTERVAL = 20.0   # 🔧 Secondes entre embeddings du même tracker
+RESEEN_THRESHOLD = 30  # 🔧 Secondes avant de re-saluer
+IOU_THRESHOLD = 0.3    # 🔧 Seuil IoU pour le matching
 
 # ==========================================
 # 🧮 UTILITY FUNCTIONS
@@ -66,7 +66,7 @@ def iou(box1, box2):
     return inter_area / union_area if union_area > 0 else 0
 
 # ==========================================
-# ⌨️ ASCOLTO TASTO 'Q'
+# ⌨️ ÉCOUTE TOUCHE Q
 # ==========================================
 
 def key_listener():
@@ -87,8 +87,8 @@ conversation_lock = threading.Lock()
 
 def handle_interaction(name: str, embedding=None):
     try:
-        # === 1. Saluto iniziale / riconoscimento utente ===
-        # Utente nuovo -> chiedi nome e registra
+        # === 1. Salutation initiale / reconnaissance utilisateur ===
+        # Nouvel utilisateur -> demander le nom et enregistrer
         if name == "Visage détecté" and embedding is not None:
             speak_async(speak, "Bonjour ! Je ne crois pas t'avoir déjà rencontré. Comment tu t'appelles ?").result()
             time.sleep(1.2)
@@ -111,10 +111,10 @@ def handle_interaction(name: str, embedding=None):
             speak_async(speak, f"Bonjour {name} !").result()
             time.sleep(1.2)
 
-        # === 2. Stato conversazionale ===
-        # GREETING: primi turni dopo il riconoscimento
-        # FREE_TALK: conversazione libera
-        # FAREWELL: chiusura
+        # === 2. État conversationnel ===
+        # GREETING : premiers tours après la reconnaissance
+        # FREE_TALK : conversation libre
+        # FAREWELL : clôture
         state = "GREETING"
         if state == "GREETING":
             print("👋 État initial : GREETING")
@@ -122,7 +122,7 @@ def handle_interaction(name: str, embedding=None):
         silence_counter = 0
         max_silence_rounds = 5
 
-        # parole che indicano un saluto iniziale
+        # mots indiquant un salut initial
         greeting_keywords = [
             "bonjour",
             "salut",
@@ -144,19 +144,19 @@ def handle_interaction(name: str, embedding=None):
 
         print("\n🟢 Conversation active — tu peux parler maintenant !\n")
 
-        # === 3. Loop conversazionale ===
-        # first_turn: True solo per la PRIMA risposta che l'LLM genera in questa sessione
+        # === 3. Boucle conversationnelle ===
+        # first_turn : True uniquement pour la PREMIÈRE réponse générée par le LLM
         first_turn = True
 
         while not exit_event.is_set():
-            # 🎤 ascolta utente
+            # 🎤 écoute l'utilisateur
             user_text = transcribe_audio(
                 duration=20,
                 stop_on_silence=True,
                 silence_limit=3.2
             ).strip()
 
-            # gestione silenzio / inattività
+            # gestion silence / inactivité
             if not user_text:
                 silence_counter += 1
                 print(f"🤫 Silence détecté ({silence_counter}/{max_silence_rounds})")
@@ -166,15 +166,15 @@ def handle_interaction(name: str, embedding=None):
                     break
                 continue
 
-            # reset contatore silenzi perché l'utente ha parlato
+            # reset compteur silences car l'utilisateur a parlé
             silence_counter = 0
             print(f"🗣️ [STT] Tu as dit : \"{user_text}\"")
 
             lower_text = user_text.lower()
 
-            # === 3a. Gestione stato GREETING ===
+            # === 3a. Gestion état GREETING ===
             if state == "GREETING":
-                # appena l'utente dice qualcosa di più del semplice saluto, passiamo a FREE_TALK
+                # dès que l'utilisateur dit plus qu'un simple bonjour, on passe en FREE_TALK
                 if (
                     len(lower_text.split()) > 1
                     or "come" in lower_text
@@ -184,7 +184,7 @@ def handle_interaction(name: str, embedding=None):
                 ):
                     state = "FREE_TALK"
                 else:
-                    # È ancora un saluto leggero, rispondi e continua
+                    # Encore un salut léger, répondre et continuer
                     reply_future = ask_ollama_async(
                         lambda prompt: ask_ollama_with_context(
                             name,
@@ -205,7 +205,7 @@ def handle_interaction(name: str, embedding=None):
                     time.sleep(1.0)
                     continue
 
-            # === 3b. Fine conversazione? (sia FREE_TALK che GREETING)
+            # === 3b. Fin de conversation ? (FREE_TALK ou GREETING)
             goodbye_phrases = [
                 "je dois y aller",
                 "je m'en vais",
@@ -264,7 +264,7 @@ def handle_interaction(name: str, embedding=None):
                 break  # ⛔ esci dal ciclo dopo il saluto
 
 
-            # === 3c. Conversazione normale (FREE_TALK)
+            # === 3c. Conversation normale (FREE_TALK)
             state = "FREE_TALK"
 
             reply_future = ask_ollama_async(
@@ -284,7 +284,7 @@ def handle_interaction(name: str, embedding=None):
                 is_first_turn=first_turn
             )
 
-            # dal momento che abbiamo risposto almeno una volta, non è più il primo turno
+            # après la première réponse, ce n'est plus le premier tour
             first_turn = False
 
             speak_async(speak, reply).result()
@@ -303,18 +303,18 @@ def handle_interaction(name: str, embedding=None):
         print(f"✅ Conversation avec {name} terminée.\n")
 
         try:
-            # 1) prendo gli ultimi turni dal JSON delle conversazioni
+            # 1) récupérer les derniers tours depuis le JSON des conversations
             recent = load_recent_history(name, window=10)  # qui ci sono "user" e "bot"
 
-            # 2) chiedo a Ollama di riassumerli e di scriverli nel profilo
+            # 2) demander à Ollama de les résumer et les écrire dans le profil
             summarize_conversation(name, recent)
 
             print(f"🧠 Profil de {name} mis à jour avec le résumé de la conversation.")
         except Exception as e:
-            print(f"[MEMORY] Errore durante aggiornamento del profilo: {e}")
+            print(f"[MEMORY] Erreur lors de la mise à jour du profil : {e}")
 
     except Exception as e:
-        print("[INTERACT] Errore:", repr(e))
+        print("[INTERACT] Erreur :", repr(e))
         traceback.print_exc()
 
 
@@ -330,7 +330,7 @@ def handle_interaction_threadsafe(name, embedding=None):
 # ==========================================
 
 def load_known_faces():
-    """Carica il database di embedding noti."""
+    """Charge la base de données d'embeddings connus."""
     if os.path.exists(EMBEDDINGS_FILE):
         with open(EMBEDDINGS_FILE, "rb") as f:
             known = pickle.load(f)
@@ -345,7 +345,7 @@ def load_known_faces():
 # ==========================================
 
 def main():
-    # === AVVIO WORKER E TRACKER ===
+    # === DÉMARRAGE WORKERS ET TRACKERS ===
     start_workers(speak_func=speak)
 
     print("🔊 Préchauffage TTS...")
@@ -357,30 +357,34 @@ def main():
     embedding_ready_event.wait()
     print("✅ Tous les workers prêts. Démarrage webcam.")
 
+    global _cap, _active_interactions
+
     # Carica database
     known_faces = load_known_faces()
 
-    # Avvia webcam
-    cap = cv2.VideoCapture(0)
+    # Démarrage webcam
+    _cap = cv2.VideoCapture(0)
+    cap = _cap
     if not cap.isOpened():
-        print("❌ Errore: impossibile aprire la webcam.")
+        print("❌ Erreur : impossible d'ouvrir la webcam.")
         return
 
     print("\n🎬 Démarrage reconnaissance en direct...")
     print("Appuie sur 'q' pour quitter.\n")
 
-    # 🔧 FIX: seen_names ora è un dict con timestamp
-    seen_names = {}  # name -> timestamp ultimo saluto
-    active_interactions = {}  # name/id -> thread attiva
+    # seen_names : dict nom -> timestamp dernier salut
+    seen_names = {}  # nom -> timestamp dernier salut
+    _active_interactions = {}
+    active_interactions = _active_interactions
     
     trackers = {}            # id → tracker
-    track_lost = {}          # id → contatore frame persi
+    track_lost = {}          # id → compteur frames perdues
     tracker_boxes = {}       # id → (x, y, w, h) ultima box nota
-    last_embed_time = {}     # id → timestamp ultimo embedding
+    last_embed_time = {}     # id → timestamp dernier embedding
     next_face_id = 0
     frame_id = 0
 
-    # Avvia thread per ascolto tasto 'q'
+    # Démarrage thread écoute touche Q
     threading.Thread(target=key_listener, daemon=True).start()
 
     print("\n🎬 Sistema pronto. Avvio stream video...\n")
@@ -413,7 +417,7 @@ def main():
         except queue.Empty:
             pass
 
-        # --- 🔹 Se nessuna detection, aggiorna tracker esistenti
+        # --- 🔹 Pas de détection : mise à jour des trackers existants
         if boxes is None and trackers:
             boxes = []
             for tid, tr in list(trackers.items()):
@@ -425,7 +429,7 @@ def main():
                     tracker_boxes[tid] = (x, y, w, h)
                 else:
                     track_lost[tid] += 1
-                    # 🔧 FIX: Più tollerante prima di rimuovere
+                    # 🔧 Plus tolérant avant de supprimer
                     if track_lost[tid] > TRACKER_MAX_LOST:
                         print(f"❌ Tracker {tid} perdu définitivement")
                         del trackers[tid]
@@ -433,7 +437,7 @@ def main():
                         tracker_boxes.pop(tid, None)
                         last_embed_time.pop(tid, None)
 
-        # --- 🔹 Gestione dei tracker (crea nuovi, aggiorna, rimuove persi)
+        # --- 🔹 Gestion des trackers (créer, mettre à jour, supprimer)
         if boxes is not None:
             boxes = [b for b in boxes if b is not None]
 
@@ -445,7 +449,7 @@ def main():
                 w, h = x2 - x1, y2 - y1
                 new_box = (x1, y1, w, h)
 
-                # 🔧 FIX: Matching basato su IoU
+                # 🔧 Matching basé sur IoU
                 best_iou = IOU_THRESHOLD
                 matched_id = None
                 
@@ -459,7 +463,7 @@ def main():
                             best_iou = current_iou
                             matched_id = tid
 
-                # 🔹 Se trovato match, re-inizializza tracker
+                # 🔹 Match trouvé : réinitialiser le tracker
                 if matched_id is not None:
                     trackers[matched_id].init(frame, new_box)
                     updated_trackers[matched_id] = trackers[matched_id]
@@ -467,7 +471,7 @@ def main():
                     track_lost[matched_id] = 0
                     matched_ids.add(matched_id)
                 else:
-                    # 🔹 Crea nuovo tracker
+                    # 🔹 Créer un nouveau tracker
                     tracker = (
                         cv2.legacy.TrackerCSRT_create()
                         if hasattr(cv2.legacy, "TrackerCSRT_create")
@@ -484,7 +488,7 @@ def main():
 
             trackers = updated_trackers
 
-        # --- 🔹 Disegna box e invia embedding request (con rate limiting)
+        # --- 🔹 Dessiner les boîtes et envoyer les requêtes d'embedding
         for tid, tr in list(trackers.items()):
             try:
                 ok, box = tr.update(frame)
@@ -511,7 +515,7 @@ def main():
             tracker_boxes[tid] = (x, y, w, h)
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
-            # 🔧 FIX: Rate limiting embedding request
+            # 🔧 Limitation du débit des requêtes d'embedding
             if tid not in last_embed_time or current_time - last_embed_time[tid] > EMBED_INTERVAL:
                 if not embed_request_q.full():
                     try:
@@ -520,7 +524,7 @@ def main():
                     except queue.Full:
                         pass
 
-        # --- 🔹 Legge eventuali embedding pronti
+        # --- 🔹 Lire les embeddings disponibles
         try:
             while not embed_result_q.empty():
                 emb_fid, embedding = embed_result_q.get_nowait()
@@ -528,7 +532,7 @@ def main():
 
                 name = "Visage détecté"
 
-                # 🔍 Confronto con database volti noti
+                # 🔍 Comparaison avec la base de visages connus
                 if known_faces:
                     for person, emb_db in known_faces.items():
                         match, dist = compare_embeddings(embedding, emb_db)
@@ -536,19 +540,19 @@ def main():
                             name = person
                             break
 
-                # === 🔧 FIX: evita doppie interazioni ===
+                # === Éviter les interactions en double ===
                 current_time = time.time()
-                # se sconosciuto → usa id tracker come chiave unica
+                # inconnu → utiliser l'id tracker comme clé unique
                 display_key = name if name != "Visage détecté" else emb_fid
 
                 # Controlla se è già attiva un’interazione per questo volto
                 existing = active_interactions.get(display_key)
                 if existing and getattr(existing, "is_alive", lambda: False)():
-                    # già in conversazione, aggiorna solo timestamp e salta
+                    # déjà en conversation, mettre à jour le timestamp et ignorer
                     seen_names[name] = current_time
                     continue
 
-                # Controlla cooldown per ri-saluto
+                # Vérifier le cooldown avant de re-saluer
                 if name not in seen_names or current_time - seen_names[name] > RESEEN_THRESHOLD:
                     if conversation_lock.locked():
                         print(f"⏳ En attente de fin de conversation avant d'interagir avec {name}.")
@@ -556,12 +560,12 @@ def main():
                         seen_names[name] = current_time
                         print(f"👁️  Nouveau visage détecté : {name}")
 
-                        # Avvia nuova interazione in thread dedicato
+                        # Démarrer une nouvelle interaction dans un thread dédié
                         th = threading.Thread(target=handle_interaction_threadsafe, args=(name, embedding), daemon=False)
                         active_interactions[display_key] = th
                         th.start()
 
-                    # Thread watcher che rimuove la entry a fine interazione
+                    # Thread de surveillance qui nettoie l'entrée en fin d'interaction
                     def _cleanup_thread(t, key):
                         t.join()
                         active_interactions.pop(key, None)
@@ -571,18 +575,26 @@ def main():
         except queue.Empty:
             pass
 
-        # --- 🔹 Mostra frame
+        # --- 🔹 Afficher le frame
         cv2.imshow("Face Recognition Live", frame)
         if cv2.waitKey(1) & 0xFF == ord("q"):
             exit_event.set()
             break
 
-    # --- 🔹 Cleanup finale
-    cap.release()
-    cv2.destroyAllWindows()
-    exit_event.set()
+    _cleanup()
 
-    active_threads = [t for t in active_interactions.values() if isinstance(t, threading.Thread) and t.is_alive()]
+
+_cap = None
+_active_interactions = {}
+
+
+def _cleanup():
+    exit_event.set()
+    if _cap is not None:
+        _cap.release()
+    cv2.destroyAllWindows()
+
+    active_threads = [t for t in _active_interactions.values() if isinstance(t, threading.Thread) and t.is_alive()]
     if active_threads:
         print(f"⏳ Sauvegarde du profil en cours ({len(active_threads)} conversation(s))...")
         for t in active_threads:
@@ -599,5 +611,6 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        exit_event.set()
         print("\n✅ Fermeture demandée (Ctrl+C).")
+    finally:
+        _cleanup()

@@ -72,9 +72,9 @@ def detection_worker():
     mtcnn_global = MTCNN(
         keep_all=True,
         device=DEVICE,
-        min_face_size=60,  # 🔧 Aumentato da 40 (meno falsi positivi)
-        thresholds=[0.6, 0.7, 0.8],  # 🔧 Più restrittivo (era [0.5, 0.6, 0.7])
-        post_process=True  # Allineamento automatico
+        min_face_size=60,  # 🔧 Augmenté de 40 (moins de faux positifs)
+        thresholds=[0.6, 0.7, 0.8],  # 🔧 Plus strict (était [0.5, 0.6, 0.7])
+        post_process=True  # Alignement automatique
     )
     
     # 🔧 FIX: Warm-up MTCNN completo con più passaggi
@@ -113,7 +113,7 @@ def detection_worker():
                 boxes = filtered_boxes if filtered_boxes else None
         
         except Exception as e:
-            print(f"[DETECT] Errore su frame {fid}: {e}")
+            print(f"[DETECT] Erreur sur le frame {fid} : {e}")
             boxes = None
         
         detect_result_q.put((fid, boxes))
@@ -182,7 +182,7 @@ def embedding_worker():
                 embed_result_q.put((face_id, emb))
                 
             except Exception as e:
-                print(f"[EMBED] Errore: {e}")
+                print(f"[EMBED] Erreur : {e}")
             finally:
                 embed_request_q.task_done()
 
@@ -200,7 +200,7 @@ def tts_worker(speak_func):
         try:
             speak_func(text)
         except Exception as e:
-            print(f"[TTS] Errore: {e}")
+            print(f"[TTS] Erreur : {e}")
         finally:
             tts_q.task_done()
 
@@ -230,17 +230,30 @@ def shutdown_executors():
         print("🧠 Executor Ollama arrêté")
         _ollama_executor = None
 
+def _noop_future():
+    """Returns an already-resolved Future for use when executors are shut down."""
+    import concurrent.futures
+    f = concurrent.futures.Future()
+    f.set_result(None)
+    return f
+
 def speak_async(func, *args, **kwargs):
     """Esegue la funzione TTS in background."""
-    if _tts_executor is None:
-        start_executors()
-    return _tts_executor.submit(func, *args, **kwargs)
+    if exit_event.is_set() or _tts_executor is None:
+        return _noop_future()
+    try:
+        return _tts_executor.submit(func, *args, **kwargs)
+    except RuntimeError:
+        return _noop_future()
 
 def ask_ollama_async(func, *args, **kwargs):
     """Esegue la chiamata a Ollama in background."""
-    if _ollama_executor is None:
-        start_executors()
-    return _ollama_executor.submit(func, *args, **kwargs)
+    if exit_event.is_set() or _ollama_executor is None:
+        return _noop_future()
+    try:
+        return _ollama_executor.submit(func, *args, **kwargs)
+    except RuntimeError:
+        return _noop_future()
 
 # ==========================================================
 # 🚀 START WORKERS
