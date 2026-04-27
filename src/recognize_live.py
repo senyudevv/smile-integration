@@ -3,7 +3,6 @@
 # ==========================================
 
 import os
-import re
 import cv2
 import pickle
 import time
@@ -17,7 +16,7 @@ import traceback
 from src.config import EMBEDDINGS_FILE
 from src.utils.facenet_utils import compare_embeddings
 from src.utils.speech_utils import speak, transcribe_audio, extract_name_from_text
-from src.utils.dialog_manager import ask_ollama_with_context, summarize_conversation, stream_ollama_response
+from src.utils.dialog_manager import ask_ollama_with_context, summarize_conversation
 from src.utils.text_post import clean_llm_reply
 from src.utils.profile_manager import load_recent_history
 from src.utils.memory_manager import log_full_conversation, save_new_face
@@ -85,48 +84,6 @@ def key_listener():
 # ==========================================
 last_interaction_time = 0
 conversation_lock = threading.Lock()
-
-_SENTENCE_END = re.compile(r'(?<=[.!?…])\s+')
-
-
-def speak_reply_streaming(name: str, user_text: str, state: str, is_first_turn: bool) -> str:
-    """
-    Streame la réponse d'Ollama et la lit phrase par phrase dès qu'elle est complète.
-    Retourne le texte complet prononcé.
-    """
-    buffer = ""
-    full_reply = ""
-    first_sentence = True
-
-    for token in stream_ollama_response(name, user_text, is_first_turn=is_first_turn, state=state):
-        if exit_event.is_set():
-            break
-        buffer += token
-        # Découper aux fins de phrases
-        parts = _SENTENCE_END.split(buffer)
-        if len(parts) > 1:
-            for sentence in parts[:-1]:
-                sentence = sentence.strip()
-                if not sentence:
-                    continue
-                cleaned = clean_llm_reply(sentence, state=state, is_first_turn=is_first_turn and first_sentence)
-                if cleaned:
-                    print(f"🔊 [TTS] {cleaned}")
-                    speak(cleaned)
-                    full_reply += cleaned + " "
-                    first_sentence = False
-            buffer = parts[-1]
-
-    # Reste du buffer
-    if buffer.strip() and not exit_event.is_set():
-        cleaned = clean_llm_reply(buffer.strip(), state=state, is_first_turn=is_first_turn and first_sentence)
-        if cleaned:
-            print(f"🔊 [TTS] {cleaned}")
-            speak(cleaned)
-            full_reply += cleaned
-
-    return full_reply.strip()
-
 
 def handle_interaction(name: str, embedding=None):
     try:
@@ -228,8 +185,21 @@ def handle_interaction(name: str, embedding=None):
                     state = "FREE_TALK"
                 else:
                     # Encore un salut léger, répondre et continuer
-                    reply = speak_reply_streaming(name, user_text, state=state, is_first_turn=first_turn)
+                    reply_future = ask_ollama_async(
+                        lambda prompt: ask_ollama_with_context(
+                            name,
+                            prompt,
+                            is_first_turn=first_turn,
+                            state=state
+                        ),
+                        user_text
+                    )
+
+                    reply_raw = reply_future.result(timeout=120)
+                    reply = clean_llm_reply(reply_raw, state=state, is_first_turn=first_turn)
                     first_turn = False
+
+                    speak_async(speak, reply).result()
                     log_full_conversation(name, user_text, reply)
                     print("🟢 Prêt à écouter !")
                     time.sleep(1.0)
@@ -271,19 +241,62 @@ def handle_interaction(name: str, embedding=None):
                     "Maximum deux phrases. Ne pose pas de questions."
                 )
 
-                farewell_reply = speak_reply_streaming(name, farewell_prompt, state="FAREWELL", is_first_turn=False)
+                reply_future = ask_ollama_async(
+                    lambda prompt: ask_ollama_with_context(
+                        name,
+                        prompt,
+                        is_first_turn=False,
+                        state="FAREWELL"
+                    ),
+                    farewell_prompt
+                )
+                farewell_raw = reply_future.result(timeout=120)
+                farewell_reply = clean_llm_reply(
+                    farewell_raw,
+                    state="FAREWELL",
+                    is_first_turn=False
+                )
+
+                speak_async(speak, farewell_reply).result()
                 log_full_conversation(name, user_text, farewell_reply)
-                break
+                print(f"🔊 [TTS] Robot a dit : \"{farewell_reply}\"")
+
+                break  # ⛔ esci dal ciclo dopo il saluto
 
 
             # === 3c. Conversation normale (FREE_TALK)
             state = "FREE_TALK"
 
-            reply = speak_reply_streaming(name, user_text, state=state, is_first_turn=first_turn)
+            reply_future = ask_ollama_async(
+                lambda prompt: ask_ollama_with_context(
+                    name,
+                    prompt,
+                    is_first_turn=first_turn,
+                    state=state
+                ),
+                user_text
+            )
+
+            reply_raw = reply_future.result(timeout=120)
+            reply = clean_llm_reply(
+                reply_raw,
+                state=state,
+                is_first_turn=first_turn
+            )
+
+            # après la première réponse, ce n'est plus le premier tour
             first_turn = False
 
+            speak_async(speak, reply).result()
             log_full_conversation(name, user_text, reply)
-            time.sleep(0.5)
+            #update_profile_notes(
+            #    name,
+            #    f"L'utente ha detto: \"{user_text}\". Il robot ha risposto: \"{reply}\"."
+            #)
+
+            print(f"🔊 [TTS] Robot a dit : \"{reply}\"\n")
+
+            time.sleep(1.0)
             print("🟢 Prêt à écouter !")
 
         # === 4. Fine conversazione ===
